@@ -1,4 +1,10 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input } from '@angular/core';
+import { ActionSheetButton, ActionSheetController, Platform } from '@ionic/angular';
+import { InAppBrowser } from '@awesome-cordova-plugins/in-app-browser/ngx';
+import { SocialSharing } from '@awesome-cordova-plugins/social-sharing/ngx';
+
+import { StorageService } from '../../services/storage.service';
+
 import { Article } from '../../interfaces';
 
 @Component({
@@ -6,13 +12,98 @@ import { Article } from '../../interfaces';
   templateUrl: './article.component.html',
   styleUrls: ['./article.component.scss'],
 })
-export class ArticleComponent implements OnInit {
+export class ArticleComponent{
 
   @Input() article: Article;
   @Input() index: number;
 
-  constructor() { }
+  constructor(
+    private iab: InAppBrowser, 
+    private platform: Platform, 
+    private actionSheetCtrl: ActionSheetController,
+    private socialSharing: SocialSharing, 
+    private storageService: StorageService) { }
 
-  ngOnInit() {}
+  openArticle(){
+    if(this.platform.is("ios") || this.platform.is("android")){
+      const browser = this.iab.create(this.article.url);
+      browser.show();
+      return;
+
+    }
+
+    window.open(this.article.url, '_blank');
+
+  }
+
+
+  async onOpenMenu(){
+
+    const articleInFavorite = this.storageService.articleInFavorites(this.article);
+
+    const normalBtns: ActionSheetButton[] = [
+      {
+        text: articleInFavorite ? 'Remover favorito' : 'Favorito',
+        icon: articleInFavorite ? 'heart' : 'heart-outline',
+        handler: () => this.onToggleFavorite()
+      },
+      {
+        text: 'Cancelar',
+        icon: 'close-outline',
+        role: 'cancel'
+      }
+    ];
+
+    const share: ActionSheetButton = {
+      text: 'Compartir',
+      icon: 'share-outline',
+      handler: () => this.onShareArticle()
+    };
+    
+    normalBtns.unshift(share);
+
+    const actionSheet = await this.actionSheetCtrl.create({
+      header: 'Opciones',
+      buttons: normalBtns
+    });
+
+    
+
+    
+
+    await actionSheet.present();
+  }
+
+  onShareArticle(){
+    console.log('Share article');
+    if(this.platform.is('capacitor')){
+
+      this.socialSharing.share(
+        this.article.title + " capacitor",
+        this.article.source.name,
+        null,
+        this.article.url
+      );
+    }else{
+      if(navigator.share){
+        navigator.share({
+          title: this.article.title,
+          text: this.article.source.name,
+          url: this.article.url
+        })
+          .then(() => console.log('Successful share'))
+          .catch((error) => console.log('Error sharing', error));
+      }else{
+        console.log("No soporta el compartir")
+      }
+    }
+    
+  }
+
+  onToggleFavorite(){
+    console.log('toggle favorite');
+    this.storageService.saveRemoveArticle(this.article);
+    
+  }
 
 }
